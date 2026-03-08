@@ -1,0 +1,19 @@
+# VisDrone 数据集 YOLOv8 配置文件
+
+path: D:/Capstone/Datasets/visdrone
+
+train: images/train
+val: images/val
+test: images/test-dev # optional
+
+names:
+  0: pedestrian
+  1: people
+  2: bicycle
+  3: car
+  4: van
+  5: truck
+  6: tricycle
+  7: awning-tricycle
+  8: bus
+  9: motor

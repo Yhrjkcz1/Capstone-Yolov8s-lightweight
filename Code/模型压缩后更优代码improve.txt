@@ -1,0 +1,287 @@
+# 以下所有代码均为后期人为添加
+# =================================================================
+# Coordinate Attention (CA) for YOLOv8 C2f Integration
+# =================================================================
+
+import math
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from ultralytics.nn.modules.conv import Conv
+from ultralytics.nn.modules.block import Bottleneck, GhostBottleneck
+
+
+# ------------------------
+# h-sigmoid / h-swish
+# ------------------------
+class h_sigmoid(nn.Module):
+    def __init__(self, inplace=True):
+        super().__init__()
+        self.relu = nn.ReLU6(inplace=inplace)
+
+    def forward(self, x):
+        return self.relu(x + 3) / 6
+
+
+class h_swish(nn.Module):
+    def __init__(self, inplace=True):
+        super().__init__()
+        self.sigmoid = h_sigmoid(inplace=inplace)
+
+    def forward(self, x):
+        return x * self.sigmoid(x)
+
+
+# ------------------------
+# Coordinate Attention
+# ------------------------
+class CoordAtt(nn.Module):
+    def __init__(self, inp, oup, reduction=32):
+        super().__init__()
+        self.pool_h = nn.AdaptiveAvgPool2d((None, 1))
+        self.pool_w = nn.AdaptiveAvgPool2d((1, None))
+
+        mip = max(8, inp // reduction)
+
+        self.conv1 = nn.Conv2d(inp, mip, 1, 1, 0)
+        self.bn1 = nn.BatchNorm2d(mip)
+        self.act = h_swish()
+
+        self.conv_h = nn.Conv2d(mip, oup, 1, 1, 0)
+        self.conv_w = nn.Conv2d(mip, oup, 1, 1, 0)
+
+    def forward(self, x):
+        identity = x
+        n, c, h, w = x.size()
+
+        x_h = self.pool_h(x)
+        x_w = self.pool_w(x).permute(0, 1, 3, 2)
+
+        y = torch.cat([x_h, x_w], dim=2)
+        y = self.act(self.bn1(self.conv1(y)))
+
+        x_h, x_w = torch.split(y, [h, w], dim=2)
+        x_w = x_w.permute(0, 1, 3, 2)
+
+        a_h = torch.sigmoid(self.conv_h(x_h))
+        a_w = torch.sigmoid(self.conv_w(x_w))
+
+        return identity * a_h * a_w
+
+
+# ------------------------
+# C2f + CA
+# ------------------------
+class C2f_CA(nn.Module):
+    def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=1.0):
+        super().__init__()
+        self.c = max(int(c2 * e), 1)
+        self.n = int(n)
+
+        self.cv1 = Conv(c1, 2 * self.c, 1, 1)
+        self.cv2 = Conv((2 + self.n) * self.c, c2, 1)
+
+        self.m = nn.ModuleList(
+            Bottleneck(self.c, self.c, shortcut, g, e=1.0)
+            for _ in range(self.n)
+        )
+
+        self.ca = CoordAtt(c2, c2)
+
+    def forward(self, x):
+        y = list(self.cv1(x).chunk(2, 1))
+        y.extend(m(y[-1]) for m in self.m)
+        return self.ca(self.cv2(torch.cat(y, 1)))
+
+
+# =================================================================
+# ECA
+# =================================================================
+class ECA(nn.Module):
+    def __init__(self, channel, gamma=2, b=1):
+        super().__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+
+        channel = int(channel)
+        t = int(abs((math.log(channel, 2) + b) / gamma))
+        k = t if t % 2 else t + 1
+        k = max(k, 1)
+
+        self.conv = nn.Conv1d(1, 1, kernel_size=k, padding=(k - 1) // 2, bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        y = self.avg_pool(x)
+        y = self.conv(y.squeeze(-1).transpose(-1, -2))
+        y = self.sigmoid(y).transpose(-1, -2).unsqueeze(-1)
+        return x * y
+
+class C2f_ECA(nn.Module):
+    """
+    C2f 模块集成 ECA 注意力机制
+    """
+    def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=0.5):
+        super().__init__()
+        # 沿用手动锁死通道的逻辑，防止 YAML 解析器导致 0 通道
+        self.c = max(int(c2 * e), 1) 
+        self.actual_n = int(n)
+        
+        self.cv1 = Conv(int(c1), 2 * self.c, 1, 1)
+        self.cv2 = Conv(int((2 + self.actual_n) * self.c), int(c2), 1)
+        
+        self.m = nn.ModuleList(
+            Bottleneck(self.c, self.c, shortcut, g, k=((3, 3), (3, 3)), e=1.0) 
+            for _ in range(self.actual_n)
+        )
+        # 初始化 ECA
+        self.eca = ECA(int(c2))
+
+    def forward(self, x):
+        y = list(self.cv1(x).chunk(2, 1))
+        y.extend(m(y[-1]) for m in self.m)
+        out = self.cv2(torch.cat(y, 1))
+        # 在输出端进行通道注意力加权
+        return self.eca(out)
+
+# 结合 Selective Ghost 策略与 ECA 注意力机制的 C2f 模块
+
+# ------------------------
+# C2f + SG + ECA (精度优先版)
+# ------------------------
+class C2f_SG_ECA(nn.Module):
+    """
+    精度优先版：
+    ★ 不再压缩通道（e=1.0）
+    ★ Head 中建议 n=1
+    """
+    def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=1.0):  # ★ MODIFIED
+        super().__init__()
+        self.c = int(c2)  # ★ MODIFIED: 不再二次压缩
+        self.n = int(n)
+
+        self.cv1 = Conv(c1, 2 * self.c, 1, 1)
+        self.cv2 = Conv((2 + self.n) * self.c, c2, 1)
+
+        self.m = nn.ModuleList(
+            GhostBottleneck(self.c, self.c)
+            for _ in range(self.n)
+        )
+
+        self.eca = ECA(c2)
+
+    def forward(self, x):
+        y = list(self.cv1(x).chunk(2, 1))
+        y.extend(m(y[-1]) for m in self.m)
+        return self.eca(self.cv2(torch.cat(y, 1)))
+
+
+# =================================================================
+# AFPN / ASFF
+# =================================================================
+
+class ASFF_2L(nn.Module):
+    """
+    ★ 精度优先版 ASFF
+    - softmax → sigmoid + normalize
+    - 减弱强竞争，提升 Precision
+    """
+    def __init__(self, c1, c2, level=0):
+        super().__init__()
+        self.inter_dim = int(c2)
+
+        self.adapter0 = nn.Conv2d(c1[0], self.inter_dim, 1) if c1[0] != self.inter_dim else nn.Identity()
+        self.adapter1 = nn.Conv2d(c1[1], self.inter_dim, 1) if c1[1] != self.inter_dim else nn.Identity()
+
+        self.weight_gen = nn.Sequential(
+            nn.Conv2d(self.inter_dim, self.inter_dim // 4, 1, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(self.inter_dim // 4, 2, 1, bias=False)
+        )
+
+        self.expand = Conv(self.inter_dim, self.inter_dim, 3, 1)
+
+    def forward(self, x):
+        x0 = self.adapter0(x[0])
+        x1 = self.adapter1(x[1])
+
+        weights = self.weight_gen(x0 + x1)
+
+        # ★ MODIFIED: softmax → sigmoid + normalize
+        weights = torch.sigmoid(weights)
+        weights = weights / (weights.sum(dim=1, keepdim=True) + 1e-6)
+
+        out = x0 * weights[:, 0:1] + x1 * weights[:, 1:2]
+        return self.expand(out)
+
+
+class ASFF_3L(nn.Module):
+    def __init__(self, inter_dim, level=0):
+        super().__init__()
+        self.inter_dim = int(inter_dim)
+
+        self.w0 = Conv(self.inter_dim, 1, 1, 1)
+        self.w1 = Conv(self.inter_dim, 1, 1, 1)
+        self.w2 = Conv(self.inter_dim, 1, 1, 1)
+
+        self.expand = Conv(self.inter_dim, self.inter_dim, 3, 1)
+
+    def forward(self, x):
+        x0, x1, x2 = x
+
+        w = torch.cat([self.w0(x0), self.w1(x1), self.w2(x2)], dim=1)
+
+        # ★ MODIFIED: sigmoid normalize
+        w = torch.sigmoid(w)
+        w = w / (w.sum(dim=1, keepdim=True) + 1e-6)
+
+        out = x0 * w[:, 0:1] + x1 * w[:, 1:2] + x2 * w[:, 2:3]
+        return self.expand(out)
+
+
+
+# yaml文件
+
+nc: 10  
+scales:
+  s: [0.33, 0.50, 1024]
+
+backbone:
+  - [-1, 1, Conv, [64, 3, 2]]                  # 0
+  - [-1, 1, Conv, [128, 3, 2]]                 # 1
+  - [-1, 3, C2f, [128, True]]                  # 2
+  - [-1, 1, Conv, [256, 3, 2]]                 # 3
+  - [-1, 6, C2f, [256, True]]                  # 4
+  - [-1, 1, Conv, [512, 3, 2]]                 # 5
+  - [-1, 1, C2f_SG_ECA, [256, 256, 2, True]]   # 6 ✅ 保留（语义开始）
+  - [-1, 1, Conv, [1024, 3, 2]]                # 7
+  - [-1, 1, C2f_SG_ECA, [512, 512, 1, True]]   # 8 ✅ 最高语义层
+  - [-1, 1, SPPF, [1024, 5]]                   # 9
+
+head:
+  # --- P5 -> P4 ---
+  - [9, 1, Conv, [256, 1, 1]]                  # 10
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]] # 11
+  - [[-1, 6], 1, ASFF_2L, [256]]               # 12 ✅ 保留（关键一次）
+  
+  # --- P4 -> P3 ---
+  - [12, 1, Conv, [128, 1, 1]]                 # 13
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]] # 14
+  - [4, 1, Conv, [128, 1, 1]]                  # 15
+  - [[14, 15], 1, ASFF_2L, [128]]              # 16 ✅ 保留
+
+  # --- P3 refine ---
+  # ↓↓↓ 这里是关键改动：减轻 Ghost 强度
+  - [-1, 1, C2f_SG_ECA, [64, 64, 1, True]]     # 17 ❗ n: 3 → 1
+
+  # --- P3 -> P4 ---
+  - [17, 1, Conv, [256, 3, 2]]                 # 18
+  # ❌ 原来的 ASFF_2L 删除，避免过多决策
+  - [-1, 1, C2f, [256, True]]                  # 19 ✅ 用普通 C2f 稳定语义
+
+  # --- P4 -> P5 ---
+  - [19, 1, Conv, [512, 3, 2]]                 # 20
+  - [9, 1, Conv, [512, 1, 1]]                  # 21
+  # ❌ 删除 ASFF_2L
+  - [-1, 1, C2f, [512, True]]                  # 22 ✅ 稳定输出
+
+  - [[17, 19, 22], 1, Detect, [nc]]            # 23
