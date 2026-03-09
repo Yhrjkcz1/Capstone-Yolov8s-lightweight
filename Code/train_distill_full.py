@@ -37,14 +37,14 @@ if __name__ == "__main__":
     # 【路径配置】确保使用全量数据集 yaml 和之前训练好的最佳教师权重
     STUDENT_YAML = r"D:\Capstone\Code\ultralytics\ultralytics\cfg\models\v8\fusion\yolov8s_sg_eca_afpn_improve.yaml"
     TEACHER_PT = r"D:\Capstone\runs\detect\yolov8s\weights\best.pt" 
-    DATA_YAML = r"D:\Capstone\Code\visdrone_mini.yaml" # 全量数据集
+    DATA_YAML = r"D:\Capstone\Code\visdrone.yaml" # 全量数据集
 
     # 路径安全检查：防止自动下载官方权重
     if not os.path.exists(TEACHER_PT):
         raise FileNotFoundError(f"错误：在指定路径未找到教师模型权重: {TEACHER_PT}")
 
     # A. 初始化学生模型
-    # 加载你修改后的 C2f_SG_ECA 和 ASFF_2L 代码对应的结构
+    # 加载修改后的 C2f_SG_ECA 和 ASFF_2L 代码对应的结构
     model = YOLO(STUDENT_YAML)
     
     # B. 初始化教师模型并冻结
@@ -71,7 +71,7 @@ if __name__ == "__main__":
         warmup_epochs=3,
         close_mosaic=10,    # 最后 10 轮关闭 mosaic，稳定精准度
         patience=20,        # 20轮内 mAP 不涨则停止，防止过拟合
-        name='sea_mini_distill_v1',
+        name='sea_full_distill_v1',
         exist_ok=True
     )
 
