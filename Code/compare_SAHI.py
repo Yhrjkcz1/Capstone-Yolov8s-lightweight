@@ -10,6 +10,8 @@ def evaluate_models_final():
         r"D:\Capstone\runs\detect\yolov8s\weights\best.pt",
         r"D:\Capstone\runs\detect\sea_full_distill_v1\weights\best.pt",
         r"D:\Capstone\runs\detect\sea_mini_distill_v1\weights\best.pt",
+        r"D:\Capstone\runs\detect\v8s_afpn_full_100e_fair\weights\best.pt",
+        r"D:\Capstone\runs\detect\sea_final_compressed_full\weights\best.pt",
     ]
 
     data_yaml = r"D:\Capstone\Code\visdrone.yaml"

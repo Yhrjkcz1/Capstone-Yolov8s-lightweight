@@ -23,6 +23,7 @@ def evaluate_models():
         r"D:\Capstone\runs\detect\sea_distill_improve_final\weights\best.pt",
         r"D:\Capstone\runs\detect\sea_full_distill_v1\weights\best.pt",
         r"D:\Capstone\runs\detect\sea_mini_distill_v1\weights\best.pt",
+        
     ]
 
     data_yaml = r"D:\Capstone\Code\visdrone_mini.yaml"

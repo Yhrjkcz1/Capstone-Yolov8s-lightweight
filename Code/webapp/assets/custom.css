@@ -1,0 +1,194 @@
+/* GitHub 文档风：白底、克制、专业 */
+
+:root {
+  --gh-bg: #ffffff;
+  --gh-fg: #1f2328;
+  --gh-border: #d0d7de;
+  --gh-muted: #656d76;
+  --gh-accent: #0969da;
+  --gh-card: #f6f8fa;
+  --gh-font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  --gh-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+/* Gradio 根容器留白 */
+.gradio-container {
+  font-family: var(--gh-font) !important;
+  color: var(--gh-fg) !important;
+  background: var(--gh-bg) !important;
+  max-width: 1100px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding: 24px 16px 48px !important;
+}
+
+/* 主背景 */
+body,
+.dark body {
+  background: var(--gh-bg) !important;
+}
+
+/* 标题区 */
+.app-header {
+  border-bottom: 1px solid var(--gh-border);
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+}
+
+.app-title {
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--gh-fg);
+  margin: 0 0 8px 0;
+  line-height: 1.25;
+}
+
+.app-subtitle {
+  font-size: 1rem;
+  color: var(--gh-muted);
+  margin: 0 0 12px 0;
+  line-height: 1.5;
+}
+
+.header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.badges-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* 仿 shields.io 徽章（纯 CSS，无外链） */
+.gh-badge {
+  display: inline-block;
+  font-family: var(--gh-mono);
+  font-size: 11px;
+  line-height: 1;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--gh-border);
+  background: var(--gh-card);
+  color: var(--gh-fg);
+}
+
+.gh-badge span {
+  display: inline-block;
+  padding: 4px 8px;
+}
+
+.gh-badge .b-key {
+  background: #555;
+  color: #fff;
+}
+
+.gh-badge .b-val {
+  background: var(--gh-card);
+  color: var(--gh-fg);
+}
+
+/* 指标卡片：两列、较宽、居中 */
+.metrics-wrap {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-bottom: 24px;
+}
+
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 16px;
+  width: 100%;
+  max-width: 760px;
+}
+
+@media (max-width: 700px) {
+  .metrics-row {
+    grid-template-columns: 1fr;
+    max-width: 100%;
+  }
+}
+
+.metric-card {
+  background: var(--gh-card);
+  border: 1px solid var(--gh-border);
+  border-radius: 6px;
+  padding: 16px 18px;
+  min-height: 88px;
+}
+
+.metric-label {
+  font-size: 12px;
+  color: var(--gh-muted);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.metric-value {
+  font-size: 1.45rem;
+  font-weight: 600;
+  color: var(--gh-fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-note {
+  font-size: 12px;
+  color: var(--gh-muted);
+}
+
+/* 分区标题 */
+.section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 8px 0 12px 0;
+  color: var(--gh-fg);
+}
+
+/* About 区 */
+.about-block {
+  border-top: 1px solid var(--gh-border);
+  margin-top: 28px;
+  padding-top: 20px;
+}
+
+.about-block pre,
+.about-block code {
+  font-family: var(--gh-mono);
+  font-size: 12px;
+  background: var(--gh-card);
+  border: 1px solid var(--gh-border);
+  border-radius: 6px;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+/* 主按钮强调：覆盖 Gradio 主色为 GitHub 蓝 */
+button.primary,
+.gradio-container button.primary {
+  background: var(--gh-accent) !important;
+  border-color: var(--gh-accent) !important;
+  color: #fff !important;
+}
+
+/* 链接色 */
+a {
+  color: var(--gh-accent);
+}
+
+/* 错误提示 */
+.load-error {
+  background: #fff8c5;
+  border: 1px solid #d4a72c;
+  border-radius: 6px;
+  padding: 12px 14px;
+  color: #1f2328;
+  margin-bottom: 16px;
+}

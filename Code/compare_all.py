@@ -17,6 +17,12 @@ def evaluate_models():
         r"D:\Capstone\runs\detect\v8s_afpn_precision\weights\best.pt",
         r"D:\Capstone\runs\detect\v8s_afpn_full_100e_fair\weights\best.pt",
         r"D:\Capstone\runs\detect\sea_full_distill_v1\weights\best.pt",
+        r"D:\Capstone\runs\detect\yolov8s_kd_baseline_v1\weights\best.pt",
+        r"D:\Capstone\runs\detect\sea_final_compressed_full\weights\best.pt",
+        r"D:\Capstone\runs\detect\yolov8s_ca_visdrone (full dataset)2\weights\best.pt",
+        r"D:\Capstone\runs\detect\yolov8s_eca_visdrone (full dataset)\weights\best.pt",
+        r"D:\Capstone\runs\detect\yolov8s_sg_eca_visdrone (full dataset)\weights\best.pt",
+
     ]
 
     data_yaml = r"D:\Capstone\Code\visdrone.yaml"

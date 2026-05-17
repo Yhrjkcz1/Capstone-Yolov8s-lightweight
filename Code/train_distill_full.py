@@ -44,7 +44,7 @@ if __name__ == "__main__":
         raise FileNotFoundError(f"错误：在指定路径未找到教师模型权重: {TEACHER_PT}")
 
     # A. 初始化学生模型
-    # 加载修改后的 C2f_SG_ECA 和 ASFF_2L 代码对应的结构
+    # 加载你修改后的 C2f_SG_ECA 和 ASFF_2L 代码对应的结构
     model = YOLO(STUDENT_YAML)
     
     # B. 初始化教师模型并冻结

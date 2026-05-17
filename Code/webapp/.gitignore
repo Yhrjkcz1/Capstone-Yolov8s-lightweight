@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Gradio / 本地缓存
+.gradio/
+flagged/
+
+# 权重与大数据（若误拷入仓库）
+*.pt
+*.onnx
+*.pth
