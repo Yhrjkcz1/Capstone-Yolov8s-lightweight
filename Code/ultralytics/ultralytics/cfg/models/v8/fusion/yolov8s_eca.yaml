@@ -1,0 +1,81 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+#
+# YOLOv8 Selective-Ghost (Backbone-Only) Model
+# P3/8 - P5/32 outputs
+#
+# Design Principles:
+# 1) GhostConv ONLY for early-stage redundancy (P2 + downsample)
+# 2) Preserve P3+ semantic representation
+# 3) Head fully stable for feature fusion
+# 4) CA-ready at P4/P5 (future work)
+
+# =====================
+# Parameters
+# =====================
+nc: 10  # number of classes
+
+scales:
+  # [depth, width, max_channels]
+  n: [0.33, 0.25, 1024]
+  s: [0.33, 0.50, 1024]
+  m: [0.67, 0.75, 768]
+  l: [1.00, 1.00, 512]
+  x: [1.00, 1.25, 512]
+
+# =====================
+# Backbone
+# Selective Ghost Strategy (SAFE)
+# =====================
+backbone:
+  # [from, repeats, module, args]
+
+  # P1/2
+  - [-1, 1, Conv, [64, 3, 2]]                 # 0
+
+  # P2/4  (Ghost is SAFE here: low-level redundancy)
+  - [-1, 1, Conv, [128, 3, 2]]           # 1
+  - [-1, 3, C2f, [128, True]]             # 2
+
+  # P3/8  (CRITICAL: semantic transition zone)
+  # Downsample can use Ghost, main blocks must be standard
+  - [-1, 1, Conv, [256, 3, 2]]           # 3
+  - [-1, 4, C2f, [256, True]]                 # 4
+
+# P4/16
+  - [-1, 1, Conv, [512, 3, 2]] # 层 5: 这里输出会自动变成 256
+  - [-1, 1, C2f_ECA, [256, 256, 1, True]] # 层 6: 手动写死 [输入256, 输出256, 次数1, shortcut]
+
+  # P5/32
+  - [-1, 1, Conv, [1024, 3, 2]]  # 层 7: 这里输出会自动变成 512
+  - [-1, 1, C2f_ECA, [512, 512, 1, True]] # 层 8: 手动写死 [输入512, 输出512, 次数1, shortcut]
+
+  # Spatial Pyramid Pooling
+  - [-1, 1, SPPF, [1024, 5]]                  # 9
+
+# =====================
+# Head
+# Stable Feature Fusion (NO Ghost)
+# =====================
+head:
+  # P5 -> P4
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]] # 10
+  - [[-1, 6], 1, Concat, [1]]                  # 11
+  - [-1, 3, C2f, [512]]                        # 12
+
+  # P4 -> P3
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]] # 13
+  - [[-1, 4], 1, Concat, [1]]                  # 14
+  - [-1, 3, C2f, [256]]                        # 15
+
+  # Downsample P3 -> P4
+  - [-1, 1, Conv, [256, 3, 2]]                 # 16
+  - [[-1, 12], 1, Concat, [1]]                 # 17
+  - [-1, 3, C2f, [512]]                        # 18
+
+  # Downsample P4 -> P5
+  - [-1, 1, Conv, [512, 3, 2]]                 # 19
+  - [[-1, 9], 1, Concat, [1]]                  # 20
+  - [-1, 3, C2f, [1024]]                       # 21
+
+  # Detect
+  - [[15, 18, 21], 1, Detect, [nc]]            # 22

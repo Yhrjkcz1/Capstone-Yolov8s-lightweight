@@ -1,0 +1,121 @@
+nc: 10  
+scales:
+  s: [0.33, 0.50, 1024]
+
+backbone:
+  - [-1, 1, Conv, [64, 3, 2]]                  # 0
+  - [-1, 1, Conv, [128, 3, 2]]                 # 1
+  - [-1, 3, C2f, [128, True]]                  # 2
+  - [-1, 1, Conv, [256, 3, 2]]                 # 3
+  - [-1, 6, C2f, [256, True]]                  # 4
+  - [-1, 1, Conv, [512, 3, 2]]                 # 5
+  - [-1, 1, C2f_SG_ECA, [256, 256, 2, True]]   # 6
+  - [-1, 1, Conv, [1024, 3, 2]]                # 7
+  - [-1, 1, C2f_SG_ECA, [512, 512, 1, True]]   # 8
+  - [-1, 1, SPPF, [1024, 5]]                   # 9
+
+head:
+  # --- P5 -> P4 ---
+  - [9, 1, Conv, [256, 1, 1]]                  # 10
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]] # 11
+  - [[-1, 6], 1, ASFF_2L, [256]]               # 12 (输出 256*0.5=128)
+  
+  # --- P4 -> P3 ---
+  - [12, 1, Conv, [128, 1, 1]]                 # 13
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]] # 14
+  - [4, 1, Conv, [128, 1, 1]]                  # 15
+  - [[14, 15], 1, ASFF_2L, [128]]              # 16 (输出 128*0.5=64)
+
+  # --- 重点修改：第 17 层 ---
+  # 上一层(16层)实际输出是 64，所以这里的参数必须写 64 才能匹配输入
+  - [-1, 1, C2f_SG_ECA, [64, 64, 3, True]]     # 17 (P3检测分支)
+
+  # --- P3 -> P4 ---
+  - [17, 1, Conv, [256, 3, 2]]                 # 18
+  - [[18, 12], 1, ASFF_2L, [256]]              # 19 (输出 256*0.5=128)
+  - [-1, 1, C2f_SG_ECA, [128, 128, 3, True]]   # 20 (P4检测分支)
+
+  # --- P4 -> P5 ---
+  - [20, 1, Conv, [512, 3, 2]]                 # 21
+  - [9, 1, Conv, [512, 1, 1]]                  # 22
+  - [[21, 22], 1, ASFF_2L, [512]]              # 23 (输出 512*0.5=256)
+  - [-1, 1, C2f_SG_ECA, [256, 256, 3, True]]   # 24 (P5检测分支)
+
+  - [[17, 20, 24], 1, Detect, [nc]]            # 25
+
+
+#代码部分如下
+# ================================================================= 
+# AFPN (Asymptotic Feature Pyramid Network) Components
+# =================================================================
+
+class ASFF_2L(nn.Module):
+    def __init__(self, c1, c2, level=0):
+        super(ASFF_2L, self).__init__()
+        self.inter_dim = int(c2)
+        
+        # 核心改动：为两个输入分别建立通道适配器
+        # 这样无论输入是 128 还是 256，都会被转换成 inter_dim
+        self.adapter0 = nn.Conv2d(c1[0], self.inter_dim, 1) if c1[0] != self.inter_dim else nn.Identity()
+        self.adapter1 = nn.Conv2d(c1[1], self.inter_dim, 1) if c1[1] != self.inter_dim else nn.Identity()
+        
+        # 权值计算层
+        self.weight_level_0 = nn.Conv2d(self.inter_dim, 1, kernel_size=1)
+        self.weight_level_1 = nn.Conv2d(self.inter_dim, 1, kernel_size=1)
+        
+        self.softmax = nn.Softmax(dim=1)
+        self.expand = Conv(self.inter_dim, self.inter_dim, 3, 1)
+
+    def forward(self, x):
+        # x 是列表 [x0, x1]
+        x0, x1 = x
+        
+        # 自动对齐通道
+        x0 = self.adapter0(x0)
+        x1 = self.adapter1(x1)
+        
+        # 计算权重
+        w0 = self.weight_level_0(x0)
+        w1 = self.weight_level_1(x1)
+        
+        combined_weight = self.softmax(torch.cat([w0, w1], dim=1))
+        
+        out = x0 * combined_weight[:, 0:1] + x1 * combined_weight[:, 1:2]
+        return self.expand(out)
+    
+class ASFF_3L(nn.Module):
+    """
+    ASFF (Adaptively Spatial Feature Fusion) for 3 levels (P3, P4, P5).
+    用于 AFPN 的最终三层全融合阶段。
+    """
+    def __init__(self, inter_dim, level):
+        super(ASFF_3L, self).__init__()
+        self.inter_dim = int(inter_dim)
+        self.level = level
+        
+        self.weight_level_0 = Conv(self.inter_dim, 1, 1, 1)
+        self.weight_level_1 = Conv(self.inter_dim, 1, 1, 1)
+        self.weight_level_2 = Conv(self.inter_dim, 1, 1, 1)
+        
+        self.softmax = nn.Softmax(dim=1)
+        self.expand = Conv(self.inter_dim, int(self.inter_dim), 3, 1)
+
+    def forward(self, x):
+        """
+        x[0]: P3 feature
+        x[1]: P4 feature
+        x[2]: P5 feature
+        """
+        x0, x1, x2 = x
+        
+        w0 = self.weight_level_0(x0)
+        w1 = self.weight_level_1(x1)
+        w2 = self.weight_level_2(x2)
+        
+        weight = self.softmax(torch.cat([w0, w1, w2], dim=1))
+        
+        out = x0 * weight[:, 0:1, :, :] + \
+              x1 * weight[:, 1:2, :, :] + \
+              x2 * weight[:, 2:3, :, :]
+              
+        return self.expand(out)
