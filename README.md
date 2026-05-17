@@ -4,6 +4,20 @@ This repository provides the implementation of a lightweight **YOLOv8s-SEA model
 
 ---
 
+## Project Structure
+
+Custom work in this repository is concentrated in two places:
+
+* **Model configuration (YAML)** — under the vendored Ultralytics tree at `Code/ultralytics/ultralytics/cfg/models/v8/`. This directory holds YOLOv8 architecture definitions, including the lightweight variants used in this project (e.g., Ghost-style backbone blocks, ECA attention, AFPN-style fusion). Proposed and ablation layouts for this work are kept under the `fusion/` subfolder (for example, `yolov8s_sg_eca_afpn_improve.yaml`).
+
+* **Custom module implementations** — building blocks referenced by those YAML files are implemented in `block.py`:
+  * At the repository root: `ultralytics/nn/modules/block.py` (top-level `ultralytics/` package, alongside the `Code/` directory).
+  * A corresponding copy also exists inside the vendored fork at `Code/ultralytics/ultralytics/nn/modules/block.py`. When training with the in-repo `Code/ultralytics` sources, ensure the `block.py` you edit matches the configuration you load so definitions stay consistent.
+
+Training scripts, dataset YAML, and the Gradio demo live under `Code/` at the paths referenced in later sections.
+
+---
+
 ## 1. Environment Setup
 
 The experiments were conducted using the following environment:
