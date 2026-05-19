@@ -114,3 +114,14 @@ These metrics are used to compare the baseline YOLOv8s model and the proposed YO
 ## 6. Reproducibility
 
 The script `Generate_env.py` is included to export the environment configuration and assist in reproducing the experimental setup.
+
+---
+## 7. Web Demo Interface
+
+A Gradio-based web demo is provided for interactive testing of the trained model. The screenshot below shows the testing GUI:
+
+<p align="center">
+  <img src="Code/webapp/testGUI.png" width="700" alt="Web Demo Testing GUI">
+  <br>
+  <em>Figure: Web demo interface for UAV small object detection.</em>
+</p>
