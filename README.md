@@ -115,10 +115,17 @@ These metrics are used to compare the baseline YOLOv8s model and the proposed YO
 
 The script `Generate_env.py` is included to export the environment configuration and assist in reproducing the experimental setup.
 
+
 ---
 ## 7. Web Demo Interface
 
-A Gradio-based web demo is provided for interactive testing of the trained model. The screenshot below shows the testing GUI:
+A Gradio-based web demo is provided for interactive testing of the trained model. To launch the web application, run:
+
+​```
+python Code/webapp/app.py
+​```
+
+Once started, open the local URL displayed in the terminal (typically `http://127.0.0.1:7860`) in your browser to access the interface. The screenshot below shows the testing GUI:
 
 <p align="center">
   <img src="Code/webapp/testGUI.png" width="700" alt="Web Demo Testing GUI">
